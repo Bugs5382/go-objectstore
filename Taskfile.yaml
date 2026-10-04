@@ -23,6 +23,10 @@ tasks:
     desc: Run tests
     cmds:
       - go test -parallel {{.TESTPARALLELISM}} ./...
+  test:integration:
+    desc: Run every test, including the s3store tests against MinIO (needs Docker)
+    cmds:
+      - go test -tags integration -race -count=1 ./...
   test-cover:
     desc: Run tests with coverage reporting
     cmds:

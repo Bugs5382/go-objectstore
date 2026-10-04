@@ -1,4 +1,4 @@
-package objectstore
+package s3store
 
 /*
 MIT License
@@ -23,12 +23,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 */
 
-import "testing"
-
-func TestHello(t *testing.T) {
-	got := Hello("world")
-	want := "Hello, world!"
-	if got != want {
-		t.Errorf("Hello() = %q, want %q", got, want)
-	}
-}
+// SetCopyLimits lowers the size above which Copy switches to a multipart copy
+// and the size of each copied part, so tests reach that path without
+// gigabytes of data.
+func SetCopyLimits(s *Store, single, part int64) { s.copySingle, s.copyPart = single, part }
