@@ -23,9 +23,30 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 */
 
-import "fmt"
+import (
+	"context"
+	"iter"
+)
 
-// Hello greets a name. Replace with the package's real entry point.
-func Hello(name string) string {
-	return fmt.Sprintf("Hello, %s!", name)
+// All walks every page of a listing and yields each object, then stops at the
+// first error. Prefixes are not yielded; use List with a Delimiter for those.
+func All(ctx context.Context, s Store, opts ListOptions) iter.Seq2[Info, error] {
+	return func(yield func(Info, error) bool) {
+		for {
+			page, err := s.List(ctx, opts)
+			if err != nil {
+				yield(Info{}, err)
+				return
+			}
+			for _, info := range page.Objects {
+				if !yield(info, nil) {
+					return
+				}
+			}
+			if page.NextPageToken == "" {
+				return
+			}
+			opts.PageToken = page.NextPageToken
+		}
+	}
 }

@@ -7,34 +7,44 @@ hook-enforced rules). Keep this file current when the build, layout, or public A
 
 S3-compatible object storage for Go: a small Store interface with streaming put and get, pagination, presigned URLs and copy, an S3 backend tested on MinIO, and an in-memory fake.
 
-<!-- Fill in: what the project does, what it ships (library, service, action, CLI), and the one or
-two things an agent must understand before changing it. -->
+A Go library: the `objectstore.Store` interface (put, get, stat, delete, list, copy, presigned
+GET and PUT), an S3 backend (`s3store`, aws-sdk-go-v2), an in-memory fake (`memstore`) and the
+contract suite both pass (`objectstoretest`). Two things to know before changing it: the root
+package must not import an SDK, and every backend behaviour lives in the contract suite, so a
+change to one backend's behaviour starts with a contract test that both must pass.
 
 ## Using go-objectstore
 
-<!-- If this project is consumed by others (a library/plugin/action), describe the contract a
-consumer must respect: the single entry point, the public surface, required options, and anything
-that must not be bypassed. Delete this section for a leaf application. -->
+- Consumers take an `objectstore.Store`; they build `s3store.New(cfg)` in production and
+  `memstore.New()` in unit tests.
+- Errors are the sentinels in `errors.go`, always matched with `errors.Is`. A cancelled context
+  comes back as the context's error, never as a sentinel.
+- `WithCodes` attaches the consumer's go-apperr codes; `Observe` is the logging and metrics hook.
+  The library itself does not log.
+- SSE-C stores cannot presign (`ErrInvalid`): the request would have to carry the key.
 
 ## Layout
 
-<!-- The directories that matter and what lives in each. Keep it short; point at the entry points. -->
-
-- `src/` - <what>
-- `<tests dir>/` - <what>
+- `store.go`, `errors.go` - the interface, options and sentinels
+- `codes.go`, `observe.go`, `walk.go` - the `WithCodes` and `Observe` decorators and the `All`
+  iterator
+- `internal/check` - validation and error shaping every backend shares (keys, metadata, limits,
+  the counting upload body)
+- `objectstoretest/` - the contract suite (`Run`)
+- `memstore/` - the fake and its presigned-URL handler
+- `s3store/` - the S3 backend: `config.go`, `s3store.go` (get, stat, list, delete, presign),
+  `put.go` (single and multipart uploads), `copy.go`, `errors.go` (S3 error mapping)
+- `s3store/integration_*_test.go` - MinIO tests behind the `integration` build tag
 
 ## Build, test, lint
 
-<!-- The exact commands. Pull these from package.json scripts (npm), the Taskfile (Go/Task), or
-pyproject (Python) so they stay accurate. -->
-
-- Build: `<command>`
-- Test: `<command>` (note any service/fixture the integration tests require)
-- Lint: `<command>`
-- Package checks (npm packages), after a build: `npm run check:pack` (contents and ceiling),
-  `npm run check:pack:growth` (growth against the last release), `npm run check:install`
-  (install the tarball, import ESM and CJS); see CLAUDE.md "npm package contents"
-- License headers / docs: `<command>`
+- Build: `task build`
+- Test: `task test` (hermetic, no Docker). `task test:integration` adds the s3store tests, which
+  start MinIO containers through testcontainers and need Docker; CI runs them in
+  `job-go-integration.yaml`.
+- Lint: `task lint` (gofmt, golangci-lint, yamllint); also `golangci-lint run --build-tags
+  integration ./...` and `gosec ./...`
+- License headers: `task license` (verify), `task license:fix` (inject)
 
 ## Logging
 
@@ -56,4 +66,9 @@ Follow the logging rules in `CLAUDE.md`. In short:
   `.claude/hooks` (run `bash .claude/hooks/install.sh` once per clone).
 - Open every PR as a draft. CI skips drafts, so run the full checks locally, push once they pass,
   and mark the PR ready when the work is finished; see CLAUDE.md "CI and Actions minutes".
-- <project-specific conventions, non-obvious constraints, and traps an agent should know>
+- MinIO cannot store an object and a prefix of the same name (`a` and `a/b`) and caps path
+  segments at 255 bytes; keep contract keys inside those limits.
+- The default MinIO image is the community `pgsty/minio` build (`OBJECTSTORE_MINIO_IMAGE`
+  overrides it); upstream images are no longer published.
+- Test identities are fakes under `example.org`/`example.test`, and container credentials are
+  generated per run. Never put real hosts or keys in tests.
